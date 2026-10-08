@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mots croisés pour toi 💛</title>
+<style>
+:root{--bg:#fff7f3;--fg:#3a2a2a;--card:#fff;--line:#e8c9c0;--acc:#e0587a;--hl:#ffe3ea;--cur:#ffc2d1;--bad:#ffb4b4;--ok:#c8f0d2;--muted:#8a6f70;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#1e1618;--fg:#f5e8e8;--card:#2a1f22;--line:#5a4348;--acc:#ff7a9c;--hl:#4a2a35;--cur:#7a3a50;--bad:#7a2a2a;--ok:#2a5a3a;--muted:#b89a9c}}
+:root[data-theme="dark"]{--bg:#1e1618;--fg:#f5e8e8;--card:#2a1f22;--line:#5a4348;--acc:#ff7a9c;--hl:#4a2a35;--cur:#7a3a50;--bad:#7a2a2a;--ok:#2a5a3a;--muted:#b89a9c}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:Georgia,"Times New Roman",serif;line-height:1.4}
+main{max-width:640px;margin:0 auto;padding:18px 16px 40px}
+h1{font-size:1.5rem;margin:0 0 4px;text-align:center;color:var(--acc)}
+.sub{text-align:center;color:var(--muted);margin:0 0 16px;font-size:.95rem}
+#grid{display:grid;grid-template-columns:repeat(10,var(--s));gap:2px;justify-content:center;--s:min(40px,calc((100vw - 48px)/10));margin-bottom:14px}
+.cell,.blank{width:var(--s);height:var(--s)}
+.cell{position:relative;background:var(--card);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.cell.hl{background:var(--hl)}
+.cell.cur{background:var(--cur)}
+.cell.bad{background:var(--bad)}
+.cell.ok{background:var(--ok)}
+.cell input{width:100%;height:100%;border:0;background:transparent;text-align:center;text-transform:uppercase;font:700 18px Georgia,serif;color:var(--fg);padding:0;outline:none;caret-color:transparent}
+.num{position:absolute;top:1px;left:3px;font-size:9px;color:var(--muted);pointer-events:none}
+.btns{display:flex;gap:8px;justify-content:center;margin-bottom:6px}
+button{font:inherit;background:var(--acc);color:#fff;border:0;border-radius:20px;padding:8px 16px;cursor:pointer}
+button.alt{background:transparent;color:var(--acc);border:1px solid var(--acc)}
+#status{text-align:center;min-height:1.4em;color:var(--muted);font-size:.9rem;margin:6px 0 12px}
+h2{font-size:1.05rem;margin:14px 0 6px;color:var(--acc)}
+ol{list-style:none;margin:0;padding:0}
+li{padding:8px 10px;background:var(--card);border:1px solid var(--line);border-radius:10px;margin-bottom:6px;cursor:pointer;font-size:.95rem}
+li b{color:var(--acc);margin-right:6px}
+li.done{opacity:.55;text-decoration:line-through}
+li.act{border-color:var(--acc)}
+#win{display:none;margin:16px 0;padding:18px;background:var(--card);border:2px solid var(--acc);border-radius:14px;text-align:center;font-size:1.05rem}
+</style>
+</head>
+<body>
+<main>
+<h1>Mots croisés pour toi 💛</h1>
+<p class="sub">Retrouve les mots de notre histoire grâce aux petits indices. Touche une case pour commencer !</p>
+<div id="grid"></div>
+<div class="btns"><button id="check">Vérifier</button><button id="hint" class="alt">Un coup de pouce</button></div>
+<div id="status"></div>
+<div id="win"></div>
+<h2>Horizontalement</h2><ol id="cA"></ol>
+<h2>Verticalement</h2><ol id="cD"></ol>
+</main>
+<script>
+// Message affiché quand toutes les cases sont justes : modifie-le comme tu veux !
+const MESSAGE = "Bravo, tu as tout retrouvé ! Chaque mot est un petit morceau de notre histoire. Je t'aime 💛";
+
+const R = 11, C = 10;
+const W = [
+  {n:1,d:'D',r:0,c:4,a:'LEGO',t:"Les petites briques qu'on assemble ensemble pour construire plein de choses 🧱"},
+  {n:2,d:'A',r:1,c:0,a:'VERNET',t:"Au pied du Canigou, la ville où nos premiers mots ont été échangés 🏔️"},
+  {n:3,d:'D',r:1,c:9,a:'BUS',t:"Tu en es complètement folle, et je ne me lasse pas de te taquiner avec ça 🚌"},
+  {n:4,d:'A',r:3,c:1,a:'MCDONALDS',t:"Notre tout premier repas à deux 🍟"},
+  {n:5,d:'D',r:3,c:5,a:'NATATION',t:"Le sport qu'on adore partager : direction le grand bain 🏊"},
+  {n:6,d:'A',r:5,c:3,a:'MOTUS',t:"Notre jeu du soir, juste avant de s'endormir 🌙"},
+  {n:7,d:'A',r:8,c:4,a:'PIZZA',t:"La toute première chose qu'on a cuisinée ensemble chez moi 🍕"},
+  {n:8,d:'A',r:10,c:3,a:'BANYULS',t:"Notre escapade en week-end dans le sud, au bord de la mer ☀️"}
+];
+const cells = {};
+W.forEach(w => [...w.a].forEach((ch, i) => {
+  const r = w.r + (w.d === 'D' ? i : 0), c = w.c + (w.d === 'A' ? i : 0), k = r + ',' + c;
+  const cell = cells[k] || (cells[k] = {ch, r, c, words: {}});
+  cell.words[w.d] = w;
+  if (i === 0) cell.num = w.n;
+}));
+const grid = document.getElementById('grid');
+const cellOf = (w, i) => cells[(w.r + (w.d === 'D' ? i : 0)) + ',' + (w.c + (w.d === 'A' ? i : 0))];
+const idxIn = (cell, w) => w.d === 'A' ? cell.c - w.c : cell.r - w.r;
+let act = {w: W[1], i: 0};
+
+function refresh() {
+  Object.values(cells).forEach(x => x.el.classList.remove('hl', 'cur'));
+  for (let i = 0; i < act.w.a.length; i++) cellOf(act.w, i).el.classList.add('hl');
+  cellOf(act.w, act.i).el.classList.add('cur');
+  document.querySelectorAll('li').forEach(l => l.classList.toggle('act', l.dataset.n == act.w.n));
+}
+function setActive(w, i, focus = true) {
+  act = {w, i}; refresh();
+  if (focus) { const inp = cellOf(w, i).input; inp.focus(); inp.select(); }
+}
+function pick(cell) {
+  const ds = Object.keys(cell.words);
+  const isCur = cellOf(act.w, act.i) === cell;
+  let d = (isCur && ds.length > 1) ? (act.w.d === 'A' ? 'D' : 'A') : (cell.words[act.w.d] ? act.w.d : ds[0]);
+  const w = cell.words[d];
+  setActive(w, idxIn(cell, w));
+}
+function move(cell, dr, dc) {
+  let r = cell.r + dr, c = cell.c + dc;
+  while (r >= 0 && r < R && c >= 0 && c < C) {
+    const n = cells[r + ',' + c];
+    if (n) {
+      const d = dr ? 'D' : 'A';
+      const w = n.words[d] || Object.values(n.words)[0];
+      return setActive(w, idxIn(n, w));
+    }
+    r += dr; c += dc;
+  }
+}
+for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+  const cell = cells[r + ',' + c];
+  if (!cell) { const b = document.createElement('div'); b.className = 'blank'; grid.appendChild(b); continue; }
+  const el = document.createElement('div'); el.className = 'cell';
+  if (cell.num) { const s = document.createElement('span'); s.className = 'num'; s.textContent = cell.num; el.appendChild(s); }
+  const inp = document.createElement('input');
+  inp.maxLength = 2; inp.autocomplete = 'off'; inp.autocapitalize = 'characters'; inp.spellcheck = false;
+  inp.setAttribute('aria-label', 'Case ' + (r + 1) + ',' + (c + 1));
+  el.appendChild(inp); grid.appendChild(el);
+  cell.el = el; cell.input = inp;
+  inp.addEventListener('click', () => pick(cell));
+  inp.addEventListener('input', () => {
+    const v = inp.value.toUpperCase().normalize('NFD').replace(/[^A-Z]/g, '');
+    inp.value = v.slice(-1);
+    el.classList.remove('bad');
+    if (inp.value && cellOf(act.w, act.i) === cell && act.i < act.w.a.length - 1) setActive(act.w, act.i + 1);
+    update();
+  });
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Backspace' && !inp.value && cellOf(act.w, act.i) === cell && act.i > 0) {
+      e.preventDefault(); setActive(act.w, act.i - 1); cellOf(act.w, act.i).input.value = '';
+    } else if (e.key === 'ArrowRight') { e.preventDefault(); move(cell, 0, 1); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); move(cell, 0, -1); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); move(cell, 1, 0); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); move(cell, -1, 0); }
+  });
+}
+W.forEach(w => {
+  const li = document.createElement('li');
+  li.dataset.n = w.n; li.innerHTML = '<b>' + w.n + '.</b> ' + w.t + ' <small>(' + w.a.length + ' lettres)</small>';
+  li.addEventListener('click', () => {
+    let i = 0;
+    for (; i < w.a.length - 1; i++) if (!cellOf(w, i).input.value) break;
+    setActive(w, i);
+  });
+  document.getElementById(w.d === 'A' ? 'cA' : 'cD').appendChild(li);
+  w.li = li;
+});
+function update() {
+  W.forEach(w => {
+    const s = [...w.a].map((_, i) => cellOf(w, i).input.value.toUpperCase()).join('');
+    w.li.classList.toggle('done', s === w.a);
+  });
+  const all = Object.values(cells).every(x => x.input.value.toUpperCase() === x.ch);
+  const win = document.getElementById('win');
+  if (all) { win.textContent = MESSAGE; win.style.display = 'block'; win.scrollIntoView({behavior: 'smooth', block: 'center'}); }
+  else win.style.display = 'none';
+}
+document.getElementById('check').addEventListener('click', () => {
+  let wrong = 0, filled = 0;
+  Object.values(cells).forEach(x => {
+    const v = x.input.value.toUpperCase();
+    if (v) { filled++; if (v !== x.ch) { wrong++; x.el.classList.add('bad'); } }
+  });
+  document.getElementById('status').textContent = !filled ? "Commence par remplir quelques cases 😉" : wrong ? wrong + " lettre(s) à revoir, courage !" : "Tout ce qui est rempli est juste 💛";
+  setTimeout(() => Object.values(cells).forEach(x => x.el.classList.remove('bad')), 1800);
+});
+document.getElementById('hint').addEventListener('click', () => {
+  const x = cellOf(act.w, act.i);
+  x.input.value = x.ch; x.el.classList.add('ok');
+  if (act.i < act.w.a.length - 1) setActive(act.w, act.i + 1);
+  update();
+});
+refresh();
+</script>
+</body>
+</html>
